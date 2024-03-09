@@ -38,12 +38,14 @@ master_command_file=$work_dir/master-commands.cmd
 
 # CHANGE HERE !!!
 sed -i '1iexport PATH=$PATH:/root/bin' /root/.bashrc
+sed -i '1iexport PATH=$PATH:/usr/lib/go-1.21/bin' /root/.bashrc
 sed -i '1iexport PATH=$PATH:$GOPATH/bin' /root/.bashrc
 sed -i '1iexport GOPATH=/root/go' /root/.bashrc
 source /root/.bashrc
 export GOPATH=$work_dir/go
 export PATH=$PATH:$GOPATH/bin
 export PATH=$PATH:$work_dir/bin
+export PATH=$PATH:/usr/lib/go-1.21/bin
 
 echo "INITIALZING" > $status_file
 
@@ -92,18 +94,15 @@ add-apt-repository -y ppa:longsleep/golang-backports
 
 apt-get -y update
 apt-get -y install \
-	# golang-go \
+	golang-1.21-go \
 	protobuf-compiler \
 	protobuf-compiler-grpc \
 	git \
 	openssl \
 	jq \
-	graphviz
-
-echo "Installing golang."
-
-wget https://storage.googleapis.com/golang/go1.17.2.linux-amd64.tar.gz
-tar xpzf go1.17.2.linux-amd64.tar.gz -C /usr/bin
+	graphviz \
+	make \
+	gcc
 
 echo "Disabling Go modules."
 sed -i '1iexport GO111MODULE=auto' /root/.bashrc
@@ -141,6 +140,7 @@ go get -u github.com/op/go-logging
 
 echo "Installing bls"
 go get -u github.com/herumi/bls-eth-go-binary/bls
+cd /root/go/src/github.com/herumi/bls-eth-go-binary && make -j4
 
 echo "Creating app folders."
 cd $GOPATH || exit 1
@@ -149,8 +149,8 @@ cd src/github.com/hyperledger-labs || exit 1
 
 echo "Obtaining own IP addresses and tag."
 # Obtain public and private IP from instance detail.
-# own_public_ip=$(jq -r '.primaryIpAddress' < "$detail_file")
-# own_private_ip=$(jq -r '.primaryBackendIpAddress' < "$detail_file")
+own_public_ip=$(jq -r '.primaryIpAddress' < "$detail_file")
+own_private_ip=$(jq -r '.primaryBackendIpAddress' < "$detail_file")
 #own_tag=$(jq -r '.tagReferences[0].tag.name' < "$detail_file")
 # Get tag from a separately uploaded file, in order not to rely on the cloud tagging system.
 own_tag=$(cat "$instance_tag_file")
@@ -162,4 +162,5 @@ echo "Tag: $own_tag"
 
 echo "RUNNING" > $status_file
 
-# } >> $log_file 2>> $log_file
+# }
+#  >> $log_file 2>> $log_file

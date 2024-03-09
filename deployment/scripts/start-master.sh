@@ -43,19 +43,15 @@ ssh $ssh_options root@$master_ip "chmod u+x /root/user-script-master.sh.template
 # Generate TLS certificates and compile code at the master
 ssh $ssh_options root@$master_ip "
   cd $remote_tls_directory &&
-  ./generate.sh $master_ip &&
+  ./generate.sh -f $master_ip &&
   cd $remote_work_dir &&
   cp -r $remote_tls_directory . &&
 
   echo 'Compiling ISS.' &&
-  export PATH=\$PATH:$remote_gopath/bin:$remote_work_dir/bin &&
-  export GOPATH=$remote_work_dir/go
   # Disabling go modles to be able to compile with new Go version (>=1.16.3)
-  export GO111MODULE=auto
-  export GOCACHE=/root/.cache/go-build
   cd $remote_code_dir &&
   ./run-protoc.sh &&
-  go install ./cmd/..." || exit 6
+  go install ./..." || exit 6
 # &&
 #
 #  echo 'Cloning and compiling old Mir.' &&
@@ -82,3 +78,4 @@ ssh $ssh_options root@$master_ip "
   $remote_work_dir/scripts/analyze/analyze-continuously.sh $remote_exp_dir $remote_status_file $remote_work_dir/scripts $remote_work_dir/queries $remote_gopath/bin/orderingpeer $remote_gopath/bin/orderingclient $remote_analysis_processes > $remote_exp_dir/continuous-analysis.log 2>&1 &
   export PATH=\$PATH:$remote_gopath/bin:$remote_work_dir/bin &&
   discoverymaster $master_port file $remote_master_command_file > $remote_master_log 2>&1 < /dev/null"
+echo "start-master.sh  end......"

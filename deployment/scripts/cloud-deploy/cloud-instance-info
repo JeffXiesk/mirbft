@@ -1,6 +1,6 @@
-master 34.204.183.138 172.31.67.76 master us-west-2a
-client 44.222.132.179 172.31.65.189 1client us-west-2a
-p1 3.235.41.190 172.31.70.95 peers us-west-2a
-p2 44.200.169.74 172.31.66.19 peers us-west-2a
-p3 3.236.73.9 172.31.67.101 peers us-west-2a
-p4 18.206.187.122 172.31.70.217 peers us-west-2a
+master 44.192.80.222 172.31.66.219 master us-west-2a
+client 3.236.207.166 172.31.77.219 1client us-west-2a
+p1 3.237.23.19 172.31.77.234 peers us-west-2a
+p2 3.238.175.224 172.31.66.151 peers us-west-2a
+p3 44.200.194.92 172.31.71.130 peers us-west-2a
+p4 18.207.159.98 172.31.70.176 peers us-west-2a

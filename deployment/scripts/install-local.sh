@@ -62,3 +62,7 @@ go get golang.org/x/crypto/blake2b
 
 echo "Installing the YAML parser for Go"
 go get -u gopkg.in/yaml.v2
+
+echo "Installing bls"
+go get -u github.com/herumi/bls-eth-go-binary/bls
+cd $GOPATH/src/github.com/herumi/bls-eth-go-binary && make -j4
