@@ -17,11 +17,12 @@ package membership
 import (
 	"math/rand"
 	"sort"
+	"sync"
 
-	logger "github.com/rs/zerolog/log"
 	"github.com/hyperledger-labs/mirbft/config"
 	"github.com/hyperledger-labs/mirbft/crypto"
 	pb "github.com/hyperledger-labs/mirbft/protobufs"
+	logger "github.com/rs/zerolog/log"
 )
 
 var (
@@ -51,6 +52,13 @@ var (
 	nodeIDs []int32
 
 	SimulatedCrashes map[int32]*pb.NodeIdentity
+
+	// Ladon: Simulate Straggler setting
+	SimulatedStraggler map[int32]int32
+	
+	// Ladon: highest rank
+	htn int32
+	lock     sync.Mutex
 )
 
 // Initializes the Client key (to be changed at some point).
@@ -71,7 +79,23 @@ func Init() {
 	}
 
 	SimulatedCrashes = make(map[int32]*pb.NodeIdentity)
+	SimulatedStraggler = make(map[int32]int32)
+	htn = -1
 }
+
+// Ladon: Write and read htn
+func SetHtn(newHtn int32) {
+	lock.Lock()
+	htn = newHtn
+	lock.Unlock()
+}
+
+func GetHtn() int32 {
+    lock.Lock()
+    defer lock.Unlock()
+    return htn
+}
+// Ladon
 
 // Initializes the known node identities.
 func InitNodeIdentities(identities []*pb.NodeIdentity) {
@@ -101,6 +125,19 @@ func InitNodeIdentities(identities []*pb.NodeIdentity) {
 	})
 	for _, p := range allNodeIDs[:config.Config.Failures] {
 		SimulatedCrashes[p] = nodeIdentities[p]
+	}
+
+	// rand.Seed(config.Config.RandomSeed)
+	// for i := 0; i < config.Config.StragglerCnt; i++ {
+	// 	randi := int32(rand.Intn(len(allNodeIDs)))
+	// 	for SimulatedStraggler[randi] == 1 {
+	// 		randi = int32(rand.Intn(len(allNodeIDs)))
+	// 	}
+	// 	SimulatedStraggler[randi] = 1
+	// }
+	// logger.Debug().Msgf("SimulatedStraggler is %v", SimulatedStraggler)
+	for _, p := range allNodeIDs[:config.Config.StragglerCnt] {
+		SimulatedStraggler[p] = 1
 	}
 }
 

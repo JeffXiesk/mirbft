@@ -17,3 +17,10 @@ message Timeout {
 message Heartbeat {
 
 }
+
+message HtnMsg {
+    int32 sn = 1;
+    int32 tn = 2;
+    int32 view = 3;
+    int32 htn = 4;
+}

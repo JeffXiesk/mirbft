@@ -5,3 +5,7 @@
 *.coverprofile
 *.tmp
 .idea
+
+deployment-data/
+
+*.pb.go

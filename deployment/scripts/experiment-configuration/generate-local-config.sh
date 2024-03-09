@@ -46,9 +46,10 @@ reuseFaulty=true  # If true, both correct and faulty peers will have the same ta
                   # The failure count is only expressed as a parameter in (every peer's) config file, and even the faulty peers will see
                   # Faulty=false in their config file. They need to derive their behavior from the Failures config field (and potentially
                   # the RandomSeed field).
+StragglerCnt=(1) # Count of Straggler (Only effect when crashTimings is 'Straggler')
 
 # Low-level system parameters
-loggingLevel="info"
+loggingLevel="debug"
 peerTag="peers"
 faultyPeerTag="faultyPeers"
 minConcurrentRequests=$((256 * 16384)) # Based on empirical data. At saturation, makes the throughput-latency plot nicely go up (as it is equivalent to may concurrent clients).
@@ -76,13 +77,13 @@ minBuckets="16"
 minEpochLength="256"       # [entries]
 nodeConnections="1"
 minConnections="16"
-leaderPolicies="Simple Single"  # Possible values:
+leaderPolicies="Simple"  # Possible values:
                          #     "Single": only one node in the leaderset. Simulates the single leader version of the protocols.
                          #     "Simple": all nodes in the leaderset
                          #     "Blacklist": faulty nodes are blacklisted, at least 2f+1 nodes in the leaderset
                          #     "Backoff": faulty nodes are temporarily blacklisted and their penalty exponentially increases if after reinclusion to the leaderset they are faulty again.
 leaderPolicyWithFaults="SimulatedRandomFailures"
-crashTimings="EpochStart" # Possible values:
+crashTimings="Straggler" # Possible values:
                           #     "EpochStart": The faulty nodes stop participating at the protocol at the beginning of the first epoch
                           #     "EpochEnd": The faulty nodes stop participating at the protocol before proposing their last batch
                           #     "Straggler": The faulty nodes, if in the leaderset, delay proposing their batches for 0.5*viewChangeTimeouts. Works only with Pbft orderer.
@@ -110,8 +111,8 @@ function skip() {
 }
 
 throughputsAuthPbft=$()
-throughputsAuthPbft[4]="128 256"
-throughputsAuthPbft[8]=""
+throughputsAuthPbft[4]="256"
+throughputsAuthPbft[8]="256"
 throughputsAuthPbft[16]=""
 throughputsAuthPbft[32]=""
 throughputsAuthPbft[64]=""
@@ -276,12 +277,12 @@ dplLines() {
 
 
 config() {
-  cat config-file-templates/mir-modular.yml | sed "s/LOGGINGLEVEL/$loggingLevel/ ; s/ORDERER/$orderer/ ; s/CHECKPOINTER/$cpt/ ; s/FAILURES/$numFailures/ ; s/PRIORITYCONNECTIONS/$numConnections/ ; s/VIEWCHANGETIMEOUT/$viewChangeTimeout/ ; s/CRASHTIMING/$crashTiming/ ; s/LEADERPOLICY/$leaderPolicy/ ; s/EPOCH/$epoch/ ; s/SEGMENTLENGTH/$segmentLength/ ; s/WATERMARK/$watermark/ ; s/BUCKETS/$numBuckets/ ; s/BATCHSIZE/$batchsize/ ; s/PAYLOAD/$payloadSize/ ; s/BATCHTIMEOUT/$batchtimeout/ ; s/THROUGHPUTCAP/$throughputCap/ ; s/MSGBATCHPERIOD/$msgBatchPeriod/ ; s/CLIENTS/$instances/ ; s/REQUESTS/$requests/ ; s/DURATION/$((duration * 1000))/ ; s/REQUESTRATE/$rate/ ; s/HARDRATELIMIT/$hardRateLimit/ ; s/BATCHVERIFIER/$batchVerifier/ ; s/REQUESTHANDLERTHREADS/$requestHandlers/ ; s/REQUESTINPUTBUFFER/$requestBufferSize/ ; s/AUTH/$auth/ ; s/VERIFYEARLY/$verifyEarly/ ; s/RANDOMSEED/$randomNumber/ ; s/FAULTY/false/ ; s/NLR/$nlr/" > $exp_data_dir/config/config-$exp.yml
-  cat config-file-templates/mir-modular.yml | sed "s/LOGGINGLEVEL/$loggingLevel/ ; s/ORDERER/$orderer/ ; s/CHECKPOINTER/$cpt/ ; s/FAILURES/$numFailures/ ; s/PRIORITYCONNECTIONS/$numConnections/ ; s/VIEWCHANGETIMEOUT/$viewChangeTimeout/ ; s/CRASHTIMING/$crashTiming/ ; s/LEADERPOLICY/$leaderPolicy/ ; s/EPOCH/$epoch/ ; s/SEGMENTLENGTH/$segmentLength/ ; s/WATERMARK/$watermark/ ; s/BUCKETS/$numBuckets/ ; s/BATCHSIZE/$batchsize/ ; s/PAYLOAD/$payloadSize/ ; s/BATCHTIMEOUT/$batchtimeout/ ; s/THROUGHPUTCAP/$throughputCap/ ; s/MSGBATCHPERIOD/$msgBatchPeriod/ ; s/CLIENTS/$instances/ ; s/REQUESTS/$requests/ ; s/DURATION/$((duration * 1000))/ ; s/REQUESTRATE/$rate/ ; s/HARDRATELIMIT/$hardRateLimit/ ; s/BATCHVERIFIER/$batchVerifier/ ; s/REQUESTHANDLERTHREADS/$requestHandlers/ ; s/REQUESTINPUTBUFFER/$requestBufferSize/ ; s/AUTH/$auth/ ; s/VERIFYEARLY/$verifyEarly/ ; s/RANDOMSEED/$randomNumber/ ; s/FAULTY/true/ ; s/NLR/$nlr/" > $exp_data_dir/config/config-$exp-faulty.yml
+  cat config-file-templates/mir-modular.yml | sed "s/LOGGINGLEVEL/$loggingLevel/ ; s/ORDERER/$orderer/ ; s/CHECKPOINTER/$cpt/ ; s/FAILURES/$numFailures/ ; s/STRAGGLERCNT/$numStraggler/ ; s/PRIORITYCONNECTIONS/$numConnections/ ; s/VIEWCHANGETIMEOUT/$viewChangeTimeout/ ; s/CRASHTIMING/$crashTiming/ ; s/LEADERPOLICY/$leaderPolicy/ ; s/EPOCH/$epoch/ ; s/SEGMENTLENGTH/$segmentLength/ ; s/WATERMARK/$watermark/ ; s/BUCKETS/$numBuckets/ ; s/BATCHSIZE/$batchsize/ ; s/PAYLOAD/$payloadSize/ ; s/BATCHTIMEOUT/$batchtimeout/ ; s/THROUGHPUTCAP/$throughputCap/ ; s/MSGBATCHPERIOD/$msgBatchPeriod/ ; s/CLIENTS/$instances/ ; s/REQUESTS/$requests/ ; s/DURATION/$((duration * 1000))/ ; s/REQUESTRATE/$rate/ ; s/HARDRATELIMIT/$hardRateLimit/ ; s/BATCHVERIFIER/$batchVerifier/ ; s/REQUESTHANDLERTHREADS/$requestHandlers/ ; s/REQUESTINPUTBUFFER/$requestBufferSize/ ; s/AUTH/$auth/ ; s/VERIFYEARLY/$verifyEarly/ ; s/RANDOMSEED/$randomNumber/ ; s/FAULTY/false/ ; s/NLR/$nlr/" > $exp_data_dir/config/config-$exp.yml
+  cat config-file-templates/mir-modular.yml | sed "s/LOGGINGLEVEL/$loggingLevel/ ; s/ORDERER/$orderer/ ; s/CHECKPOINTER/$cpt/ ; s/FAILURES/$numFailures/ ; s/STRAGGLERCNT/$numStraggler/ ; s/PRIORITYCONNECTIONS/$numConnections/ ; s/VIEWCHANGETIMEOUT/$viewChangeTimeout/ ; s/CRASHTIMING/$crashTiming/ ; s/LEADERPOLICY/$leaderPolicy/ ; s/EPOCH/$epoch/ ; s/SEGMENTLENGTH/$segmentLength/ ; s/WATERMARK/$watermark/ ; s/BUCKETS/$numBuckets/ ; s/BATCHSIZE/$batchsize/ ; s/PAYLOAD/$payloadSize/ ; s/BATCHTIMEOUT/$batchtimeout/ ; s/THROUGHPUTCAP/$throughputCap/ ; s/MSGBATCHPERIOD/$msgBatchPeriod/ ; s/CLIENTS/$instances/ ; s/REQUESTS/$requests/ ; s/DURATION/$((duration * 1000))/ ; s/REQUESTRATE/$rate/ ; s/HARDRATELIMIT/$hardRateLimit/ ; s/BATCHVERIFIER/$batchVerifier/ ; s/REQUESTHANDLERTHREADS/$requestHandlers/ ; s/REQUESTINPUTBUFFER/$requestBufferSize/ ; s/AUTH/$auth/ ; s/VERIFYEARLY/$verifyEarly/ ; s/RANDOMSEED/$randomNumber/ ; s/FAULTY/true/ ; s/NLR/$nlr/" > $exp_data_dir/config/config-$exp-faulty.yml
 }
 
 csvLine() {
-    echo "$exp,$numPeers,$nlr,$numFailures,$crashTiming,$viewChangeTimeout,$numLocations,$bandwidth,$numConnections,$orderer,$machines,$instances,$totalclients,$segmentLength,$leaderPolicy,$epoch,$batchsize,$batchtimeout,$batchrate,$msgBatchPeriod,$numBuckets,$leaderBuckets,$auth,$verifyEarly,$throughputCap,$thr,$rate,$hardRateLimit,$requests,$watermark,$batchVerifier,$requestHandlers,$requestBufferSize" >> $csv_file
+    echo "$exp,$numPeers,$nlr,$numFailures,$numStraggler,$crashTiming,$viewChangeTimeout,$numLocations,$bandwidth,$numConnections,$orderer,$machines,$instances,$totalclients,$segmentLength,$leaderPolicy,$epoch,$batchsize,$batchtimeout,$batchrate,$msgBatchPeriod,$numBuckets,$leaderBuckets,$auth,$verifyEarly,$throughputCap,$thr,$rate,$hardRateLimit,$requests,$watermark,$batchVerifier,$requestHandlers,$requestBufferSize" >> $csv_file
 }
 
 generate() {
@@ -587,6 +588,8 @@ for numPeers in $systemSizes; do
 
   numFailures=${failureCounts[0]}
   failureCounts=(${failureCounts[@]:1})
+  numStraggler=${StragglerCnt[0]}
+  StragglerCnt=(${StragglerCnt[@]:1})
 
   if $reuseFaulty; then
     numPeers=$((numPeers + numFailures))
