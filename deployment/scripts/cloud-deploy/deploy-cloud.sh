@@ -140,7 +140,18 @@ if [ "$1" = "-d" ]; then
     echo "Start deployment..."
     ./deploy.sh remote scripts/cloud-deploy/cloud-instance-info new scripts/experiment-configuration/generate-config.sh
     echo "End deployment..."
+
+    for i in "${public_ip_arr[@]}"
+    do
+        ssh $ssh_options_cloud root@$i 'tc qdisc del dev ens5 root' &
+        echo 'End setting delay...'
+    done
+    wait
+
 fi
+
+
+
 
 # for ((c=0;c<$peer_num;c++)) do
 #     ssh $ssh_options_cloud root@${public_ip_arr[c+bandwidth_cnt]} 'tc qdisc del dev ens5 root'
