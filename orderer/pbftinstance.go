@@ -42,9 +42,7 @@ const (
 
 var (
 // Store the htn msg from all instances
-// htnLog = cmap.New[*pb.HtnMessage]()
-// htnLog = make(map[int]int)
-	// lock     sync.Mutex
+	lock     sync.Mutex
 )
 
 // TODO: Consolidate the segment-internal and the global checkpoints.
@@ -72,7 +70,7 @@ type pbftInstance struct {
 	// Ladon
 	startTs         int64 // Timestamp of the start of the instance. Used for estimating duration of segment.
 	htnLog          map[int32]int32
-	htnRecv         int
+	htnRecv         map[int32]int
 	readyToPropose  chan struct{}
 	lastProposeSn   int32
 	firstUncommitSn map[int32]int32
@@ -198,7 +196,7 @@ func (pi *pbftInstance) init(seg manager.Segment, orderer *PbftOrderer) {
 	// Ladon
 	// Initialize the htnLog and htnRecv
 	pi.htnLog = make(map[int32]int32)
-	pi.htnRecv = 0
+	pi.htnRecv = make(map[int32]int)
 	for i := 0; i < membership.NumNodes(); i++ {
 		pi.htnLog[int32(i)] = -1
 	}
@@ -288,6 +286,7 @@ func (pi *pbftInstance) lead() {
 
 		htnToPropose := membership.GetHtn() + 1
 		newSeqMsg.Tn = htnToPropose
+		membership.SetHtn(htnToPropose)
 		snFromHtnToPropose := htnToPropose*int32(membership.NumNodes()) + int32(pi.segment.SegID())
 
 		logger.Debug().
@@ -316,10 +315,11 @@ func (pi *pbftInstance) lead() {
 
 		// Update related information for next proposal
 		pi.lastProposeSn = msg.Sn
-		pi.htnRecv = 0
+		lock.Lock()
 		for key, _ := range pi.htnLog {
 			pi.htnLog[key] = -1
 		}
+		lock.Unlock()
 
 		// Ladon
 
@@ -752,21 +752,23 @@ func (pi *pbftInstance) handleHtnmsg(htnmsg *pb.HtnMsg, msg *pb.ProtocolMessage)
 		Int32("view", pi.view).
 		Int32("senderID", senderID).
 		Msg("Handling Htnmsg.")
-
+	
+	lock.Lock()
 	pi.htnLog[senderID] = htnmsg.Htn
+	lock.Unlock()
 
 	//update my highest tn value
 	if tn > membership.GetHtn() {
 		membership.SetHtn(tn)
 	}
 
-	// 遍历map寻找最大value
-	for key, value := range pi.htnLog {
-		logger.Debug().Int32("key", key).Int32("value", value).Msg("In lead, pi.htnLog !")
-	}
+	// // Find max pi.htnlog
+	// for key, value := range pi.htnLog {
+	// 	logger.Debug().Int32("key", key).Int32("value", value).Msg("In lead, pi.htnLog !")
+	// }
 
-	pi.htnRecv += 1
-	if pi.htnRecv >= membership.Quorum() {
+	pi.htnRecv[sn] += 1
+	if pi.htnRecv[sn] == membership.Quorum() {
 		go func() {
 			logger.Info().Int32("sn", sn).Msg("Ready to propose next block !")
 			pi.readyToPropose <- struct{}{}
