@@ -107,16 +107,17 @@ func (b *Buffer) Add(req *Request) bool {
 		// Request is below the client watermark window.
 		// Ignore it.
 	} else if clientSN < b.LowWatermark {
-		logger.Debug().
-			Int32("lowWM", b.LowWatermark).
-			Int32("windowSize", clientWatermarkWindowSize).
-			Int32("clSn", clientSN).
-			Int32("clId", req.Msg.RequestId.ClientId).
-			Msg("Request sequence number below client's watermark window.")
+		// logger.Debug().
+		// 	Int32("lowWM", b.LowWatermark).
+		// 	Int32("windowSize", clientWatermarkWindowSize).
+		// 	Int32("clSn", clientSN).
+		// 	Int32("clId", req.Msg.RequestId.ClientId).
+		// 	Msg("Request sequence number below client's watermark window.")
 
-		// Request not present in the bucket at this point.
-		// Do not retry with a verified signature.
-		return false
+		// // Request not present in the bucket at this point.
+		// // Do not retry with a verified signature.
+		// return false
+		return true
 
 		// Request is within the current watermark window.
 		// Try adding it to the bucket.

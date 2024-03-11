@@ -71,7 +71,8 @@ type pbftInstance struct {
 	startTs         int64 // Timestamp of the start of the instance. Used for estimating duration of segment.
 	htnLog          map[int32]int32
 	htnRecv         map[int32]int
-	readyToPropose  chan struct{}
+	readyToPropose  map[int32]chan struct{}
+	alreadyCommit	map[int32]chan struct{}
 	lastProposeSn   int32
 	firstUncommitSn map[int32]int32
 	// Ladon
@@ -200,15 +201,13 @@ func (pi *pbftInstance) init(seg manager.Segment, orderer *PbftOrderer) {
 	for i := 0; i < membership.NumNodes(); i++ {
 		pi.htnLog[int32(i)] = -1
 	}
-	pi.readyToPropose = make(chan struct{})
-	go func() {
-		pi.readyToPropose <- struct{}{}
-	}()
+	pi.readyToPropose = make(map[int32]chan struct{})
+	pi.alreadyCommit = make(map[int32]chan struct{})
 
 	pi.lastProposeSn = -1
 	pi.firstUncommitSn = make(map[int32]int32)
 	for i := 0; i < membership.NumNodes(); i++ {
-		pi.firstUncommitSn[int32(i)] = int32(i)
+		pi.firstUncommitSn[int32(i)] = int32(i) + seg.FirstSN() - int32(seg.SegID()%membership.NumNodes())
 	}
 	// Ladon
 }
@@ -221,7 +220,7 @@ func (pi *pbftInstance) lead() {
 	// Simulate a straggler.
 	if membership.SimulatedStraggler[int32(pi.segment.SegID())%int32(membership.NumNodes())] == 1 && config.Config.CrashTiming == "Straggler" {
 		//if config.Config.CrashTiming == "Straggler" {
-		config.Config.BatchTimeoutMs = int(0.2 * float64(config.Config.ViewChangeTimeoutMs))
+		config.Config.BatchTimeoutMs = int(0.16666667 * float64(config.Config.ViewChangeTimeoutMs))
 		config.Config.BatchTimeout = time.Duration(config.Config.BatchTimeoutMs) * time.Millisecond
 		logger.Info().Str("byzantine", config.Config.CrashTiming).Int("batchTimeout", config.Config.BatchTimeoutMs).Msg("byzantine effected !")
 		// we set the batchsize to an infinate practically size, so that we always wait for the timeout
@@ -274,7 +273,14 @@ func (pi *pbftInstance) lead() {
 
 		// Ladon
 		// Wait for pi.readyToPropose signal (collect enough htn Msg)
-		<-pi.readyToPropose
+		// If it is the first sn, propose directly
+		if pi.lastProposeSn != -1 {
+			// If the channel not initialize, initialize it first.
+			if pi.readyToPropose[pi.lastProposeSn] == nil {
+				pi.readyToPropose[pi.lastProposeSn] = make(chan struct{})
+			}
+			<-pi.readyToPropose[pi.lastProposeSn]
+		}
 
 		//Find max value in pi.htnlog
 		// for key, value := range pi.htnLog {
@@ -770,8 +776,12 @@ func (pi *pbftInstance) handleHtnmsg(htnmsg *pb.HtnMsg, msg *pb.ProtocolMessage)
 	pi.htnRecv[sn] += 1
 	if pi.htnRecv[sn] == membership.Quorum() {
 		go func() {
-			logger.Info().Int32("sn", sn).Msg("Ready to propose next block !")
-			pi.readyToPropose <- struct{}{}
+			logger.Info().Int32("sn", sn).Msg("<-pi.readyToPropose ready to propose next block !")
+			// If the channel not initialize, initialize it first.
+			if pi.readyToPropose[pi.lastProposeSn] == nil {
+				pi.readyToPropose[sn] = make(chan struct {})
+			}
+			pi.readyToPropose[sn] <- struct{}{}
 		}()
 	}
 
@@ -816,21 +826,48 @@ func (pi *pbftInstance) announce(batch *pbftBatch, sn int32, reqBatch *pb.Batch,
 		}
 	}
 
-	// Ladon: Commit the empty block
-	for i := pi.firstUncommitSn[batch.preprepareMsg.Leader]; i < sn; i += int32(membership.NumNodes()) {
-		emptyBatch := &request.Batch{Requests: make([]*request.Request, 0, 0)}
-		emptyEntry := &log.Entry{
-			Sn:        i,
-			Batch:     emptyBatch.Message(),
-			ProposeTs: proposeTs,
-			CommitTs:  commitTs,
-			Aborted:   aborted,
-			Digest:    batch.digest,
+	// Ladon
+	// Only the batch has preprepareMsg can do Ladon
+	if batch.preprepareMsg != nil {
+		for i := pi.firstUncommitSn[batch.preprepareMsg.Leader]; i < sn; i += int32(membership.NumNodes()) {
+			if pi.batches[pi.view][i] != nil && ( pi.batches[pi.view][i].preprepareMsg != nil || len(pi.batches[pi.view][i].prepareMsgs) > 0 || len(pi.batches[pi.view][i].commitMsgs) > 0) {
+				// Wait for previous block commit
+				logger.Debug().
+					Int32("i",i).
+					Int32("sn",sn).
+					Msg("Check if previous block is a valid block")
+				go func(){
+					lock.Lock()
+					pi.alreadyCommit[i] = make(chan struct{})
+					commitChan := pi.alreadyCommit[i]
+					lock.Unlock()
+					<-commitChan
+					logger.Debug().
+						Int32("i",i).
+						Int32("sn",sn).
+						Msg("Previous valid block committed, announce current block again")
+					pi.announce(batch, sn, reqBatch, aborted, proposeTs, commitTs)
+				}()
+				return
+			}
 		}
-		logger.Info().Int32("sn", i).Msg("Commit the empty block.")
-		announcer.Announce(emptyEntry)
-		// TODO: Why so many log "WRN Not overwriting log entry."
-		pi.batches[pi.view][i] = &pbftBatch{committed: true}
+
+		// Ladon: Commit the empty block
+		for i := pi.firstUncommitSn[batch.preprepareMsg.Leader]; i < sn; i += int32(membership.NumNodes()) {
+			emptyBatch := &request.Batch{Requests: make([]*request.Request, 0, 0)}
+			emptyEntry := &log.Entry{
+				Sn:        i,
+				Batch:     emptyBatch.Message(),
+				ProposeTs: proposeTs,
+				CommitTs:  commitTs,
+				Aborted:   aborted,
+				Digest:    batch.digest,
+			}
+			logger.Info().Int32("sn", i).Msg("Commit the empty block.")
+			announcer.Announce(emptyEntry)
+			// TODO: Why so many log "WRN Not overwriting log entry."
+			pi.batches[pi.view][i] = &pbftBatch{committed: true}
+		}
 	}
 	// Ladon
 
@@ -856,7 +893,21 @@ func (pi *pbftInstance) announce(batch *pbftBatch, sn int32, reqBatch *pb.Batch,
 	announcer.Announce(logEntry)
 
 	// Ladon
-	pi.firstUncommitSn[batch.preprepareMsg.Leader] = sn + int32(membership.NumNodes())
+	if batch.preprepareMsg != nil {
+		pi.firstUncommitSn[batch.preprepareMsg.Leader] = sn + int32(membership.NumNodes())
+		// If some block is waiting for this block's commit, signal it.
+		lock.Lock()
+		if pi.alreadyCommit[sn] != nil {
+			logger.Debug().Int32("sn",sn).Msg("Block already committed.")
+			commitChan := pi.alreadyCommit[sn] 
+			lock.Unlock()
+			go func(){
+				commitChan <- struct{}{}
+			}()
+		} else {
+			lock.Unlock()
+		}
+	}
 	// Ladon
 
 	// Start new view change timeout
